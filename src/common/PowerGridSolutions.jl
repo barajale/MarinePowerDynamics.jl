@@ -56,7 +56,7 @@ end
 
 (sol::PowerGridSolution)(t, ::Colon, sym::Symbol, args...; kwargs...) = sol(t, collect(keys(sol.powergrid.nodes)), sym, args...; kwargs...)
 (sol::PowerGridSolution)(t, n, sym::Symbol, args...) = begin
-    if ~all( 1 .<= n .<= length(sol.powergrid.nodes) )
+    if any(n .< 1) || any(n .> length(sol.powergrid.nodes))
         throw(StateError("Index: $n is outside of range of nodes."))
     else
         sol(t, n, Val{sym}, args...)
@@ -76,7 +76,7 @@ end
 (sol::PowerGridSolution)(t, n::Array, sym::Symbol, args...) = begin
     bus_array=collect(keys(sol.powergrid.nodes))
     ni=[findfirst(x->x==nx, bus_array) for nx in n]
-    if any(ni.===nothing)||(~all( 1 .<= ni .<= length(sol.powergrid.nodes) ))
+    if any(ni .=== nothing) || any(ni .< 1) || any(ni .> length(sol.powergrid.nodes))
         throw(StateError("Array: $n is not in bus dictionary."))
     else
         sol(t, n, Val{sym}, args...)
