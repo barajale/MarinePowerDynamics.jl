@@ -57,7 +57,7 @@ MarinePowerDynamics.jl introduces the **LinearPTO node**, supporting dynamic cou
 ---
 ### Installation Issues
 
-If you're attemping to add this package to an existing Julia environment and encounter issues, try the following:
+If you're attempting to add this package to an existing Julia environment and encounter issues, try the following:
 
 ```julia
 
