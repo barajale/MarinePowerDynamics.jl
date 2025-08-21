@@ -109,7 +109,7 @@ Base.getindex(s::State, n, ::Type{Val{:s}}) = s[n, :u] .* conj.(s[n, :i])
 Base.getindex(s::State, n, ::Type{Val{:p}}) = real.(s[n, :s])
 Base.getindex(s::State, n, ::Type{Val{:q}}) = imag.(s[n, :s])
 
-internalindex(s, ::Colon, i) = internalindex(s, eachindex(s.grid.nodes, i))
+internalindex(s, ::Colon, i) = internalindex(s, eachindex(s.grid.nodes), i)
 internalindex(s, n::AbstractArray, i) = internalindex.(Ref(s), n, Ref(i))
 internalindex(s, n::AbstractArray, i::AbstractArray) = internalindex.(Ref(s), n, i)
 internalindex(s, n::Integer, sym::Symbol) = variable_index(s.grid.nodes, n, sym)
