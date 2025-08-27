@@ -1,5 +1,6 @@
 using Plots
-using MarinePowerDynamics: FourthOrderEq, LinearPTO
+using ImportAll
+@importall(MarinePowerDynamics)
 
 function create_plot(sol)
     generator_indices = findall(bus -> typeof(bus) == FourthOrderEq || typeof(bus) == LinearPTO, powergrid.nodes)
@@ -7,7 +8,7 @@ function create_plot(sol)
 
     pl_v = plot(sol, generator_indices, :v, legend = (0.8, 0.7), ylabel="V [p.u.]",label = labels)
     pl_p = plot(sol, generator_indices, :p, legend = (0.8, 0.7), ylabel="p [p.u.]", label=labels)
-    pl_q = plot(sol, generator_indices, :q, legend = (0.8, 0.7), ylabel="q [p.u.]", label=labels)
+    #pl_q = plot(sol, generator_indices, :q, legend = (0.8, 0.7), ylabel="q [p.u.]", label=labels)
     pl_ω = plot(sol, generator_indices, :ω, legend = (0.8, 0.7), ylabel="ω [rad/s]", label=labels)
     pl_φ = plot(sol, generator_indices, :φ, legend = (0.8, 0.7), ylabel="φ [rad]", label=labels)
 
@@ -18,4 +19,3 @@ function create_plot(sol)
             xlabel="t[s]")
 
 end
-

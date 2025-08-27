@@ -172,7 +172,7 @@
         "K_Q": 0.1,
         "V_r": 1.0,
         "C_pto": 1200000,
-        "scaling_factor": 10,
+        "scaling_factor": 2.0,
         "K_P": 0.1,
         "η": 1.0,
         "τ_P": 0.1,
@@ -354,18 +354,6 @@
       "type": "StaticLine"
     },
     {
-      "name": "branch21",
-      "params": {
-        "from": "bus6",
-        "Y": {
-          "re": 2.0,
-          "im": -5.0
-        },
-        "to": "bus15"
-      },
-      "type": "StaticLine"
-    },
-    {
       "name": "branch14",
       "params": {
         "from": "bus7",
@@ -386,6 +374,18 @@
           "im": -9.09008271975275
         },
         "to": "bus9"
+      },
+      "type": "StaticLine"
+    },
+    {
+      "name": "branch21",
+      "params": {
+        "from": "bus8",
+        "Y": {
+          "re": 1.1369941578063267,
+          "im": -2.314963475105352
+        },
+        "to": "bus15"
       },
       "type": "StaticLine"
     },
