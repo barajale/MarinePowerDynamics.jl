@@ -34,4 +34,4 @@ function exciter_saturation_eq(K_e, S_E_max, S_E_tq, V_R_max)
     return E_f_d_max, A_x, B_x
 end
 
-export ExciterSaturationEq
+export exciter_saturation_eq

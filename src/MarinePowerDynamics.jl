@@ -104,7 +104,13 @@ export rhs
 export systemsize
 export symbolsof
 export total_current
-export LinearGenerator
+export LinearPTO
 export HydraulicPTO
+
+# Parsers
+export read_powergrid, write_powergrid, Json
+
+# Faults and simulation
+export simulate, NodeParameterChange, LineFailure, PowerPerturbation, NodeShortCircuit, ChangeInitialConditions
 
 end

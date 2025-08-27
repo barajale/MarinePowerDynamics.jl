@@ -4,9 +4,6 @@
 push_coverage
 *.DS_Store
 
-# Ipython Notebooks should only be used for trying stuff out locally
-.ipynb_checkpoints/*
-*.ipynb
 
 # vim swap files
 *.swp

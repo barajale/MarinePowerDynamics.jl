@@ -28,7 +28,7 @@ Keyword Arguments
 
 """
 @DynamicNode LinearPTO(
-    τ_P, τ_Q, K_P, K_Q, V_r, Q, K_pto, C_pto, η, base_power, scaling_factor, wec_sim_path
+    τ_P, τ_Q, K_P, K_Q, V_r, Q, K_pto, C_pto, η, base_power, scaling_factor, sim_path
 ) begin
     @assert τ_P > 0 "time constant active power measurement should be >0"
     @assert τ_Q > 0 "time constant reactive power measurement should be >0"
@@ -36,7 +36,7 @@ Keyword Arguments
     @assert K_P > 0 "active power droop constant reactive power measurement should be >0"
 
     # build interpolants objects
-    df = CSV.read(wec_sim_path, DataFrame)
+    df = CSV.read(sim_path, DataFrame)
     df.Relative_Displacement = df.Float_Position .- df.Spar_Position
     df.Relative_Velocity = df.Float_Velocity .- df.Spar_Velocity
     rv_interp = LinearInterpolation(df.Time, df.Relative_Velocity, extrapolation_bc=Line())
@@ -68,3 +68,5 @@ end [[ω, dω]] begin
     dω = 1/τ_P*(-ω-K_P*(p-P))
 
 end
+
+export LinearPTO
