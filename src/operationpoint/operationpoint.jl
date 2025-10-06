@@ -143,12 +143,32 @@ function find_operationpoint(
 
     # use PowerModels to solve the power flow
     if solve_powerflow
-        _, result = power_flow(pg)
-        v = [result["solution"]["bus"][string(k)]["vm"] for k in 1:length(pg.nodes)]
-        va = [result["solution"]["bus"][string(k)]["va"] for k in 1:length(pg.nodes)]
+        data, result, bus_lookup = power_flow(pg)
+        if isa(pg.nodes, OrderedDict)
+            node_keys = collect(keys(pg.nodes))
+            bus_ids = [bus_lookup[key] for key in node_keys]
+        else
+            bus_ids = collect(1:length(pg.nodes))
+        end
+
+        bus_solution = get(result, "solution", Dict{String,Any}()) |> x -> get(x, "bus", Dict{String,Any}())
+        vm = similar(bus_ids, Float64)
+        va = similar(bus_ids, Float64)
+        for (i, idx) in enumerate(bus_ids)
+            key = string(idx)
+            source = get(bus_solution, key, nothing)
+            if source === nothing
+                source = get(data["bus"], key, nothing)
+                if source === nothing
+                    throw(OperationPointError("Power flow result missing bus with id $(key)."))
+                end
+            end
+            vm[i] = source["vm"]
+            va[i] = source["va"]
+        end
 
         # TODO write function for mapping list back to dicts
-        ic_guess = initial_guess(pg, v .* exp.(1im .* va))
+        ic_guess = initial_guess(pg, vm .* exp.(1im .* va))
     end
 
     if sol_method == :nlsolve
