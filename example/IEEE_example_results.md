@@ -39,7 +39,7 @@ If the PNG files do not display, ensure the notebook has been executed recently.
 
 ### Fig. 1 - WEC Forcing Data
 ![WEC PTO Power vs Wave Elevation](results/figures/wec_power_vs_wave.png)  
-The PTO power closely tracks wave elevation, with excursions around +/-120 kW and +/-1.2 m. This signal drives the LinearPTO in the IEEE 15 grid.
+The PTO power closely tracks wave elevation, with excursions around +/-1.2e5 W (approximately 120 kW) and +/-1.2 m. This signal drives the LinearPTO in the IEEE 15 grid.
 
 ### Fig. 2 & Fig. 3 - Flat Run Generator States
 ![IEEE 14 Flat Run Generators](results/figures/ieee14_flat_generators.png)
