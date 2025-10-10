@@ -2,6 +2,353 @@ using Plots
 using OrderedCollections: OrderedDict
 using MarinePowerDynamics: PowerGridSolution, extract_timeseries, resolve_bus, resolve_buses
 using CSV, DataFrames
+using PowerPlots
+using Setfield
+
+# Add these lines near the top of plotting_utils.jl with other using statements
+using PowerPlots
+using Setfield
+
+# ==============================================================================
+# PowerPlots Integration - Network Visualization
+# ==============================================================================
+
+function powergrid_to_powermodels(grid::PowerGrid)
+    """
+    Convert a PowerGrid (PowerDynamics.jl style) to PowerModels.jl dictionary format
+    for use with PowerPlots.jl
+    """
+    
+    pm_dict = Dict{String, Any}()
+    
+    # Basic metadata
+    pm_dict["name"] = "converted_grid"
+    pm_dict["source_type"] = "custom"
+    pm_dict["per_unit"] = "SYSTEM"
+    pm_dict["baseMVA"] = 100.0
+    
+    # Convert buses
+    pm_dict["bus"] = Dict{String, Any}()
+    bus_idx = 1
+    bus_name_to_idx = Dict{String, Int}()
+    
+    for (bus_name, bus_model) in grid.nodes
+        bus_name_to_idx[bus_name] = bus_idx
+        
+        pm_dict["bus"]["$bus_idx"] = Dict{String, Any}(
+            "bus_i" => bus_idx,
+            "name" => bus_name,
+            "bus_type" => _get_bus_type(bus_model),
+            "vmin" => 0.9,
+            "vmax" => 1.1,
+            "index" => bus_idx,
+            "va" => 0.0,
+            "vm" => _get_voltage_magnitude(bus_model),
+            "base_kv" => 138.0,
+        )
+        
+        bus_idx += 1
+    end
+    
+    # Convert generators
+    pm_dict["gen"] = Dict{String, Any}()
+    gen_idx = 1
+    
+    for (bus_name, bus_model) in grid.nodes
+        if _is_generator(bus_model)
+            pm_dict["gen"]["$gen_idx"] = Dict{String, Any}(
+                "gen_bus" => bus_name_to_idx[bus_name],
+                "pg" => _get_active_power(bus_model),
+                "qg" => 0.0,
+                "pmax" => _get_pmax(bus_model),
+                "pmin" => _get_pmin(bus_model),
+                "qmax" => 0.5,
+                "qmin" => -0.5,
+                "gen_status" => 1,
+                "index" => gen_idx,
+                "bus_name" => bus_name,
+                "gen_type" => _get_gen_type(bus_model),
+            )
+            gen_idx += 1
+        end
+    end
+    
+    # Convert loads
+    pm_dict["load"] = Dict{String, Any}()
+    load_idx = 1
+    
+    for (bus_name, bus_model) in grid.nodes
+        P, Q = _get_load(bus_model)
+        if P != 0.0 || Q != 0.0
+            pm_dict["load"]["$load_idx"] = Dict{String, Any}(
+                "load_bus" => bus_name_to_idx[bus_name],
+                "pd" => abs(P),
+                "qd" => abs(Q),
+                "status" => 1,
+                "index" => load_idx,
+                "bus_name" => bus_name,
+            )
+            load_idx += 1
+        end
+    end
+    
+    # Convert branches
+    pm_dict["branch"] = Dict{String, Any}()
+    branch_idx = 1
+    
+    for (branch_name, branch_model) in grid.lines
+        from_bus = bus_name_to_idx[branch_model.from]
+        to_bus = bus_name_to_idx[branch_model.to]
+        
+        r, x, b = _extract_line_params(branch_model)
+        
+        pm_dict["branch"]["$branch_idx"] = Dict{String, Any}(
+            "f_bus" => from_bus,
+            "t_bus" => to_bus,
+            "br_r" => r,
+            "br_x" => x,
+            "br_b" => b,
+            "rate_a" => 2.0,
+            "rate_b" => 2.0,
+            "rate_c" => 2.0,
+            "tap" => _get_tap_ratio(branch_model),
+            "shift" => 0.0,
+            "br_status" => 1,
+            "angmin" => -60.0,
+            "angmax" => 60.0,
+            "index" => branch_idx,
+            "name" => branch_name,
+            "from_name" => branch_model.from,
+            "to_name" => branch_model.to,
+        )
+        
+        branch_idx += 1
+    end
+    
+    return pm_dict
+end
+
+# Helper functions for PowerModels conversion
+_get_bus_type(bus_model) = begin
+    type_str = string(typeof(bus_model))
+    occursin("Slack", type_str) ? 3 : occursin("FourthOrderEq", type_str) || occursin("LinearPTO", type_str) ? 2 : 1
+end
+
+_get_voltage_magnitude(bus_model) = hasfield(typeof(bus_model), :U) ? bus_model.U : 1.0
+
+_is_generator(bus_model) = begin
+    type_str = string(typeof(bus_model))
+    occursin("Slack", type_str) || occursin("FourthOrderEq", type_str) || occursin("LinearPTO", type_str)
+end
+
+_get_active_power(bus_model) = hasfield(typeof(bus_model), :P) ? (bus_model.P >= 0 ? bus_model.P : 0.0) : 0.0
+
+_get_pmax(bus_model) = hasfield(typeof(bus_model), :P) ? max(abs(bus_model.P) * 1.5, 0.5) : 1.0
+
+_get_pmin(bus_model) = 0.0
+
+_get_gen_type(bus_model) = begin
+    type_str = string(typeof(bus_model))
+    occursin("Slack", type_str) ? "Slack" : occursin("FourthOrderEq", type_str) ? "Synchronous" : occursin("LinearPTO", type_str) ? "Wave Energy" : "Unknown"
+end
+
+_get_load(bus_model) = begin
+    if hasfield(typeof(bus_model), :P) && hasfield(typeof(bus_model), :Q)
+        P = bus_model.P < 0 ? bus_model.P : 0.0
+        Q = bus_model.Q < 0 ? bus_model.Q : 0.0
+        return (P, Q)
+    end
+    return (0.0, 0.0)
+end
+
+_extract_line_params(branch_model) = begin
+    type_str = string(typeof(branch_model))
+    
+    if occursin("PiModel", type_str)
+        y = branch_model.y
+        z = 1/y
+        r = real(z)
+        x = imag(z)
+        b_shunt = 2 * real(branch_model.y_shunt_km)
+        return (r, x, b_shunt)
+    elseif occursin("StaticLine", type_str)
+        Y = branch_model.Y
+        z = 1/Y
+        return (real(z), imag(z), 0.0)
+    elseif occursin("Transformer", type_str)
+        y = branch_model.y
+        z = 1/y
+        return (real(z), imag(z), 0.0)
+    else
+        return (0.01, 0.1, 0.0)
+    end
+end
+
+_get_tap_ratio(branch_model) = hasfield(typeof(branch_model), :t_ratio) ? branch_model.t_ratio : 1.0
+
+"""
+    plot_grid(grid::PowerGrid; width=600, height=600, show_labels=true, 
+              label_fontsize=8, layout_algorithm=nothing, hover_data=true, 
+              show_flow=false, legend_fontsize=12, bus_size=500, gen_size=200)
+
+Plot a PowerGrid using PowerPlots.jl with automatic conversion to PowerModels format.
+
+# Arguments
+- `grid::PowerGrid`: The power grid to plot
+- `width::Int=600`: Plot width in pixels
+- `height::Int=600`: Plot height in pixels
+- `show_labels::Bool=true`: Whether to show bus labels
+- `label_fontsize::Int=8`: Font size for bus labels
+- `layout_algorithm=nothing`: Layout algorithm (leave as `nothing` for automatic)
+- `hover_data::Bool=true`: Whether to customize hover tooltips
+- `show_flow::Bool=false`: Whether to show power flow arrows (requires 'pt' field)
+- `legend_fontsize::Int=12`: Font size for legend text
+- `bus_size::Int=500`: Size of bus nodes
+- `gen_size::Int=200`: Size of generator nodes
+
+# Returns
+- VegaLite plot object
+
+# Examples
+```julia
+plot_grid(ieee14)
+plot_grid(ieee15; width=800, height=800, label_fontsize=10)
+plot_grid(ieee15; legend_fontsize=14, bus_size=600, gen_size=300)
+```
+"""
+function plot_grid(grid::PowerGrid; 
+                   width=600, 
+                   height=600, 
+                   show_labels=true,
+                   label_fontsize=8,
+                   layout_algorithm=nothing,
+                   hover_data=true,
+                   show_flow=false,
+                   legend_fontsize=12,
+                   bus_size=500,
+                   gen_size=200)
+    
+    # Check if PowerPlots is available
+    if !isdefined(Main, :PowerPlots)
+        error("PowerPlots.jl is not loaded. Please run: using PowerPlots")
+    end
+    
+    # Convert PowerGrid to PowerModels format
+    pm_case = powergrid_to_powermodels(grid)
+    
+    # Create the plot
+    plot_kwargs = Dict(
+        :connected_components => [:gen],
+        :edge_components => [:branch],
+        :gen => (:data=>:gen_type, :color=>[:red, :blue, :orange], :size=>gen_size),
+        :bus => (:color=>:black, :size=>bus_size),
+        :width => width,
+        :height => height
+    )
+    
+    # Add power flow visualization if requested
+    if show_flow
+        plot_kwargs[:branch] = (:show_flow=>true, :show_flow_legend=>true, 
+                                :flow_arrow_size_range=>[100, 500])
+    end
+    
+    # Add layout_algorithm only if specified
+    if layout_algorithm !== nothing
+        plot_kwargs[:layout_algorithm] = layout_algorithm
+    end
+    
+    p = powerplot(pm_case; plot_kwargs...)
+    
+    # Adjust legend font size for all components
+    legend_config = Dict(
+        "labelFontSize" => legend_fontsize,
+        "titleFontSize" => legend_fontsize + 2
+    )
+    
+    # Branch legend (layer 1, sublayer 1)
+    if haskey(p.layer[1]["layer"][1]["encoding"], "color")
+        if !haskey(p.layer[1]["layer"][1]["encoding"]["color"], "legend")
+            p.layer[1]["layer"][1]["encoding"]["color"]["legend"] = Dict()
+        end
+        merge!(p.layer[1]["layer"][1]["encoding"]["color"]["legend"], legend_config)
+    end
+    
+    # Connector legend (layer 2)
+    if haskey(p.layer[2]["encoding"], "color")
+        if !haskey(p.layer[2]["encoding"]["color"], "legend")
+            p.layer[2]["encoding"]["color"]["legend"] = Dict()
+        end
+        merge!(p.layer[2]["encoding"]["color"]["legend"], legend_config)
+    end
+    
+    # Bus legend (layer 3)
+    if haskey(p.layer[3]["encoding"], "color")
+        if !haskey(p.layer[3]["encoding"]["color"], "legend")
+            p.layer[3]["encoding"]["color"]["legend"] = Dict()
+        end
+        merge!(p.layer[3]["encoding"]["color"]["legend"], legend_config)
+    end
+    
+    # Generator legend (layer 4)
+    if haskey(p.layer[4]["encoding"], "color")
+        if !haskey(p.layer[4]["encoding"]["color"], "legend")
+            p.layer[4]["encoding"]["color"]["legend"] = Dict()
+        end
+        merge!(p.layer[4]["encoding"]["color"]["legend"], legend_config)
+    end
+    
+    # Customize hover tooltips if requested
+    if hover_data
+        # Bus hover
+        p.layer[3]["mark"]["tooltip"] = Dict("content" => "data")
+        p.layer[3]["encoding"]["tooltip"] = [
+            Dict("field" => "name", "type" => "nominal", "title" => "Bus"),
+            Dict("field" => "vm", "type" => "quantitative", "title" => "Voltage (pu)"),
+            Dict("field" => "vmin", "type" => "quantitative", "title" => "V min"),
+            Dict("field" => "vmax", "type" => "quantitative", "title" => "V max")
+        ]
+        
+        # Generator hover
+        p.layer[4]["mark"]["tooltip"] = Dict("content" => "data")
+        p.layer[4]["encoding"]["tooltip"] = [
+            Dict("field" => "bus_name", "type" => "nominal", "title" => "Bus"),
+            Dict("field" => "gen_type", "type" => "nominal", "title" => "Type"),
+            Dict("field" => "pg", "type" => "quantitative", "title" => "P gen (pu)"),
+            Dict("field" => "pmax", "type" => "quantitative", "title" => "P max (pu)")
+        ]
+        
+        # Branch hover
+        p.layer[1]["layer"][1]["mark"]["tooltip"] = Dict("content" => "data")
+        p.layer[1]["layer"][1]["encoding"]["tooltip"] = [
+            Dict("field" => "name", "type" => "nominal", "title" => "Branch"),
+            Dict("field" => "from_name", "type" => "nominal", "title" => "From"),
+            Dict("field" => "to_name", "type" => "nominal", "title" => "To"),
+            Dict("field" => "br_r", "type" => "quantitative", "title" => "R (pu)"),
+            Dict("field" => "br_x", "type" => "quantitative", "title" => "X (pu)")
+        ]
+    end
+    
+    # Add bus labels if requested (only for buses, not generators)
+    if show_labels
+        # Create text layer for buses only
+        bus_text_layer = Dict(
+            "data" => p.layer[3]["data"],
+            "mark" => Dict("type" => "text", "fontSize" => label_fontsize, "dy" => 0, 
+                          "color" => "white", "fontWeight" => "bold"),
+            "encoding" => Dict(
+                "x" => p.layer[3]["encoding"]["x"],
+                "y" => p.layer[3]["encoding"]["y"],
+                "text" => Dict("field" => "name", "type" => "nominal")
+            )
+        )
+        
+        # Add bus text layer (generators will only be color-coded, no labels)
+        @set! p.layer = [p.layer..., bus_text_layer]
+    end
+    
+    return p
+end
+
 
 const _VAR_LABELS = Dict(
     :v => "V [p.u.]",
@@ -804,4 +1151,5 @@ end
 # Update exports
 export plot_grid_vars, plot_bus_dashboard, plot_bus_all_vars, plot_bus_var, 
        plot_bus_compare, save_solution_data, quick_analysis,
-       plot_system_comparison, plot_fault_response, analyze_wec_impact, plot_wec_contribution
+       plot_system_comparison, plot_fault_response, analyze_wec_impact, plot_wec_contribution,
+       plot_grid, powergrid_to_powermodels  # Add these two
