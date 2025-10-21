@@ -100,10 +100,12 @@ export find_operationpoint
 
 export PowerGrid
 export PowerGridSolution
+export resolve_bus, resolve_buses
 export rhs
 export systemsize
 export symbolsof
 export total_current
+export extract_timeseries, solution_dataframe, save_solution_dataframe
 export LinearPTO
 export HydraulicPTO
 

@@ -1,6 +1,6 @@
 # MarinePowerDynamics.jl
 
-**MarinePowerDynamics.jl** is a fork of [PowerDynamics.jl](https://github.com/JuliaEnergy/PowerDynamics.jl) designed specifically for research on the grid integration of marine energy systems, especially grid-connected Wave Energy Converters (WECs).
+**MarinePowerDynamics.jl** is a fork of [PowerDynamics.jl](https://github.com/JuliaEnergy/PowerDynamics.jl) commit (835e831) designed specifically for research on the grid integration of marine energy systems, especially grid-connected Wave Energy Converters (WECs).
 
 This package extends the original PowerDynamics.jl by adding support for dynamic marine PTO (Power Take-Off) modeling based on external time-series data and by enabling new simulation workflows for realistic, time-driven co-simulation with mechanical WEC models such as those from WEC-SIM.
 

@@ -283,9 +283,8 @@ function power_flow(power_grid::PowerGrid)
     dict = Dict{Any, Int}()
     if isa(power_grid.nodes, OrderedDict)
         for (key, node) in power_grid.nodes
-            val = length(data["gen"]) + 1
-            dict[key] = val
             make_bus_ac!(data, node)
+            dict[key] = length(data["bus"])
         end
     else
         for node in power_grid.nodes
@@ -300,7 +299,7 @@ function power_flow(power_grid::PowerGrid)
     s = Dict("output" => Dict("branch_flows" => true), "conv_losses_mp" => true)
     result = run_acdcpf(data, ACPPowerModel, Ipopt.Optimizer; setting = s)
 
-    return data, result
+    return data, result, dict
 end
 
 export power_flow

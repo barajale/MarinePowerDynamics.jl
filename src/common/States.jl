@@ -136,6 +136,24 @@ variable_index(nodes, n::String, i) = begin
     end
 end
 
+variable_index(nodes, n::Symbol, s::Symbol) = begin
+    first_idx = findfirst(ns -> ns == s, symbolsof(nodes[n]))
+    if first_idx === nothing
+        throw(StateError("Variable: $s not defined for node: $n"))
+    else
+        startindex(nodes, n) + first_idx
+    end
+end
+
+variable_index(nodes, n::Symbol, i) = begin
+    num_vars = dimension(nodes[n])
+    if i <= num_vars
+        startindex(nodes, n) + i
+    else
+        throw(BoundsError("Variable index: $i not supported for node: $(nodes[n])"))
+    end
+end
+
 variable_index(nodes, n::Integer, s::Symbol) = begin
     first_idx = findfirst(ns -> ns == s, symbolsof(nodes[n]))
     if first_idx === nothing
